@@ -60,7 +60,7 @@ create policy "search_criteria: write own"
 -- ============================================================
 create table if not exists jobs (
   id uuid primary key default gen_random_uuid(),
-  canonical_key text not null unique,
+  canonical_key text not null,
   source_id text not null,
   external_id text not null,
   title text not null,
