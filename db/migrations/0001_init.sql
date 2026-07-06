@@ -34,7 +34,7 @@ create policy "profiles: insert own"
 -- ============================================================
 create table if not exists search_criteria (
   id uuid primary key default gen_random_uuid(),
-  profile_id uuid not null references profiles (user_id) on delete cascade,
+  profile_id uuid not null unique references profiles (user_id) on delete cascade,
   job_titles text[] not null default '{}',
   regions text[] not null default '{}',
   remote_pref text check (remote_pref in ('remote', 'hybrid', 'onsite', 'any')) default 'any',
