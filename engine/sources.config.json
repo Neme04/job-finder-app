@@ -1,0 +1,40 @@
+{
+  "ats_sources": [
+    { "id": "greenhouse", "type": "ats", "auth": "none", "endpoint": "https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true", "needs": "company_tokens", "region": "global", "priority": 1, "enabled": true },
+    { "id": "lever", "type": "ats", "auth": "none", "endpoint": "https://api.lever.co/v0/postings/{company}?mode=json", "needs": "company_slugs", "region": "global", "priority": 1, "enabled": true },
+    { "id": "ashby", "type": "ats", "auth": "none", "endpoint": "https://api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true", "needs": "board_names", "region": "global", "priority": 1, "enabled": true },
+    { "id": "workable", "type": "ats", "auth": "none", "endpoint": "https://apply.workable.com/api/v1/widget/accounts/{subdomain}?details=true", "needs": "subdomains", "region": "global", "priority": 2, "enabled": false },
+    { "id": "smartrecruiters", "type": "ats", "auth": "none", "endpoint": "https://api.smartrecruiters.com/v1/companies/{company}/postings", "needs": "company_ids", "region": "global", "priority": 2, "enabled": false },
+    { "id": "recruitee", "type": "ats", "auth": "none", "endpoint": "https://{company}.recruitee.com/api/offers/", "needs": "subdomains", "region": "global", "priority": 2, "enabled": false },
+    { "id": "personio", "type": "ats", "auth": "none", "format": "xml", "endpoint": "https://{company}.jobs.personio.com/xml", "needs": "subdomains", "region": "EU-leaning", "priority": 2, "enabled": false, "note": "follow redirects; some tenants use .de" }
+  ],
+  "feed_sources": [
+    { "id": "remotive", "type": "feed", "auth": "none", "endpoint": "https://remotive.com/api/remote-jobs", "params": ["category", "search", "limit"], "region": "remote-global", "priority": 1, "enabled": true },
+    { "id": "remoteok", "type": "feed", "auth": "none", "endpoint": "https://remoteok.com/api", "note": "skip index 0 (metadata)", "region": "remote-global", "priority": 1, "enabled": true },
+    { "id": "himalayas", "type": "feed", "auth": "none", "endpoint": "https://himalayas.app/jobs/api", "search_endpoint": "https://himalayas.app/jobs/api/search", "max_per_request": 20, "region": "remote-global", "priority": 2, "enabled": false },
+    { "id": "arbeitnow", "type": "feed", "auth": "none", "endpoint": "https://www.arbeitnow.com/api/job-board-api", "region": "EU-remote", "priority": 1, "enabled": true },
+    { "id": "jobicy", "type": "feed", "auth": "none", "endpoint": "https://jobicy.com/api/v2/remote-jobs", "params": ["count", "geo", "industry", "tag"], "region": "remote-global", "priority": 2, "enabled": false },
+    { "id": "weworkremotely", "type": "rss", "auth": "none", "endpoint": "https://weworkremotely.com/remote-jobs.rss", "design_feed": "https://weworkremotely.com/categories/remote-design-jobs.rss", "region": "remote-global", "priority": 2, "enabled": false },
+    { "id": "workingnomads", "type": "feed", "auth": "none", "endpoint": "https://www.workingnomads.com/api/exposed_jobs/", "verify_endpoint": true, "region": "remote-global", "priority": 3, "enabled": false },
+    { "id": "getonboard", "type": "feed", "auth": "none", "endpoint_ref": "api-doc.getonbrd.com (/v0/search/jobs, /v0/categories/{cat}/jobs)", "verify_host": true, "region": "LATAM-remote", "priority": 3, "enabled": false },
+    { "id": "myjobmag", "type": "rss", "auth": "none", "endpoint": "https://www.myjobmag.com/feeds/", "region": "NG/GH/KE/ZA", "priority": 2, "enabled": false }
+  ],
+  "hn_source": {
+    "id": "hn_whoishiring", "type": "community", "auth": "none",
+    "thread_search": "https://hn.algolia.com/api/v1/search?query=Ask HN: Who is hiring?&tags=story,author_whoishiring",
+    "thread_fetch": "https://hn.algolia.com/api/v1/items/{threadId}",
+    "parse": "regex", "region": "startup-global", "priority": 2, "enabled": false
+  },
+  "keyed_sources": [
+    { "id": "jsearch", "type": "aggregator", "auth": "api_key", "endpoint": "https://jsearch.p.rapidapi.com/search", "params": ["query", "country", "page"], "covers": ["ng", "za", "gh", "ke", "global"], "priority": 1, "enabled": false, "note": "reaches Google-for-Jobs incl. LinkedIn/Indeed" },
+    { "id": "adzuna", "type": "aggregator", "auth": "app_id_key", "endpoint": "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}", "params": ["what", "where", "app_id", "app_key"], "covers": ["za", "gb", "us", "in", "+15"], "priority": 2, "enabled": false },
+    { "id": "jooble", "type": "aggregator", "auth": "api_key", "method": "POST", "endpoint": "https://jooble.org/api/{key}", "body": ["keywords", "location"], "covers": ["global", "ng"], "priority": 2, "enabled": false },
+    { "id": "careerjet", "type": "aggregator", "auth": "affiliate_id", "endpoint": "http://public.api.careerjet.net/search", "params": ["keywords", "location", "affid"], "covers": ["global", "ng"], "priority": 3, "enabled": false },
+    { "id": "torre", "type": "aggregator", "auth": "none", "method": "POST", "endpoint": "https://search.torre.co/opportunities/_search", "covers": ["LATAM", "remote-global"], "priority": 3, "enabled": false }
+  ],
+  "scrape_sources": [
+    { "id": "jobberman", "type": "scrape", "target": "https://www.jobberman.com/jobs", "region": "NG/Africa", "risk": "anti-bot", "priority": 4, "enabled": false },
+    { "id": "coroflot", "type": "scrape", "target": "https://www.coroflot.com/design-jobs", "region": "global", "focus": "design", "priority": 4, "enabled": false },
+    { "id": "authenticjobs", "type": "scrape", "target": "https://authenticjobs.com", "region": "global", "focus": "design/dev", "priority": 4, "enabled": false }
+  ]
+}

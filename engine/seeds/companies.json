@@ -1,0 +1,9 @@
+{
+  "greenhouse": ["stripe","databricks","anthropic","airbnb","cloudflare","brex","pinterest","affirm","figma","twilio","asana","gitlab","robinhood","coinbase","reddit","moniepoint","discord","chime","mercury","dropbox","airtable","gusto","vercel","jumia","squarespace","calendly","typeform","webflow","netlify","landor","ideo","designpickle","oura","glossier","olipop","bombas","brooklinen","harrys","quip","liquiddeath"],
+  "ashby": ["openai","ramp","notion","elevenlabs","replit","vanta","cursor","attio","ashby","watershed","linear","andela","runway","maven","ycombinator","mux","deel","ghost","hex","n8n","supabase","posthog","warp","pika","resend","raycast","clerk","tldraw"],
+  "lever": ["palantir","spotify","netflix","plaid","kraken","superside","fantasy","instrument"],
+  "workable": ["automattic","buffer","zapier","grammarly","canva","deliveroo","doist"],
+  "smartrecruiters": ["Visa","Bosch","Skechers","McDonalds","Deliveroo","IKEA","Adidas"],
+  "recruitee": ["bunq","sendcloud"],
+  "personio_pending_verification": ["n26","flixbus","depop","trivago"]
+}
