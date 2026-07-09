@@ -97,6 +97,12 @@ export function Feed() {
     await supabase.from('user_jobs').update({ status }).eq('id', id)
   }
 
+  // Clicking an already-active status button reverts the job to "new"
+  // instead of being a dead end with no way back.
+  const toggleStatus = (row: UserJob, target: JobStatus) => {
+    updateStatus(row.id, row.status === target ? 'new' : target)
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows
@@ -189,24 +195,24 @@ export function Feed() {
                 <div className="mt-3 flex gap-2">
                   <Button
                     variant={row.status === 'saved' ? 'secondary' : 'ghost'}
-                    onClick={() => updateStatus(row.id, 'saved')}
+                    onClick={() => toggleStatus(row, 'saved')}
                     className="text-xs"
                   >
-                    Save
+                    {row.status === 'saved' ? 'Unsave' : 'Save'}
                   </Button>
                   <Button
                     variant={row.status === 'applied' ? 'secondary' : 'ghost'}
-                    onClick={() => updateStatus(row.id, 'applied')}
+                    onClick={() => toggleStatus(row, 'applied')}
                     className="text-xs"
                   >
-                    Mark applied
+                    {row.status === 'applied' ? 'Applied ✓' : 'Mark applied'}
                   </Button>
                   <Button
                     variant={row.status === 'skipped' ? 'secondary' : 'ghost'}
-                    onClick={() => updateStatus(row.id, 'skipped')}
+                    onClick={() => toggleStatus(row, 'skipped')}
                     className="text-xs"
                   >
-                    Skip
+                    {row.status === 'skipped' ? 'Unskip' : 'Skip'}
                   </Button>
                 </div>
               </li>
