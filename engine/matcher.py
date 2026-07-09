@@ -9,10 +9,11 @@ never re-inserts or overwrites a user's existing status on a job.
 
 import os
 
-import requests
+from engine.http import request_with_retry
 
 REQUEST_TIMEOUT = 30
-BATCH_SIZE = 500
+BATCH_SIZE = 200
+PAGE_SIZE = 1000  # Supabase's default max rows per request
 
 
 def _client_config() -> tuple[str, str]:
@@ -32,28 +33,38 @@ def _headers(key: str, prefer: str) -> dict:
 
 def load_search_criteria() -> list[dict]:
     url, key = _client_config()
-    resp = requests.get(
+    resp = request_with_retry(
+        "get",
         f"{url}/rest/v1/search_criteria",
         headers=_headers(key, prefer=""),
         params={"select": "*"},
         timeout=REQUEST_TIMEOUT,
     )
-    resp.raise_for_status()
     return resp.json()
 
 
 def load_jobs() -> list[dict]:
     url, key = _client_config()
-    resp = requests.get(
-        f"{url}/rest/v1/jobs",
-        headers=_headers(key, prefer=""),
-        params={
-            "select": "id,source_id,title,company,location,remote,salary_min,salary_max"
-        },
-        timeout=REQUEST_TIMEOUT,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    all_jobs: list[dict] = []
+    for page in range(50):  # safety bound; 50k jobs is far beyond current scale
+        headers = {
+            **_headers(key, prefer=""),
+            "Range": f"{page * PAGE_SIZE}-{page * PAGE_SIZE + PAGE_SIZE - 1}",
+        }
+        resp = request_with_retry(
+            "get",
+            f"{url}/rest/v1/jobs",
+            headers=headers,
+            params={
+                "select": "id,source_id,title,company,location,remote,salary_min,salary_max"
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        batch = resp.json()
+        all_jobs.extend(batch)
+        if len(batch) < PAGE_SIZE:
+            break
+    return all_jobs
 
 
 def _title_matches(criteria: dict, job: dict) -> bool:
@@ -129,8 +140,7 @@ def insert_user_job_matches(rows: list[dict]) -> int:
     written = 0
     for i in range(0, len(rows), BATCH_SIZE):
         batch = rows[i : i + BATCH_SIZE]
-        resp = requests.post(endpoint, headers=headers, json=batch, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
+        request_with_retry("post", endpoint, headers=headers, json=batch, timeout=REQUEST_TIMEOUT)
         written += len(batch)
     return written
 

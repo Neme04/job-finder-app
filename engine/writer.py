@@ -9,11 +9,10 @@ the payload (its column default only applies on insert).
 import os
 from datetime import datetime, timedelta, timezone
 
-import requests
-
+from engine.http import request_with_retry
 from engine.models import Job
 
-BATCH_SIZE = 500
+BATCH_SIZE = 200
 EXPIRE_AFTER_DAYS = 14
 
 
@@ -61,11 +60,12 @@ def upsert_jobs(jobs: list[Job]) -> int:
     headers = _headers(key, prefer="resolution=merge-duplicates,return=minimal")
 
     written = 0
-    for i in range(0, len(jobs), BATCH_SIZE):
+    total_batches = (len(jobs) + BATCH_SIZE - 1) // BATCH_SIZE
+    for batch_num, i in enumerate(range(0, len(jobs), BATCH_SIZE), start=1):
         batch = jobs[i : i + BATCH_SIZE]
         payload = [_job_payload(j, now_iso) for j in batch]
-        resp = requests.post(endpoint, headers=headers, json=payload, timeout=30)
-        resp.raise_for_status()
+        print(f"[writer] upserting batch {batch_num}/{total_batches} ({len(batch)} jobs)")
+        request_with_retry("post", endpoint, headers=headers, json=payload, timeout=30)
         written += len(batch)
     return written
 
@@ -75,7 +75,6 @@ def expire_stale_jobs(days: int = EXPIRE_AFTER_DAYS) -> None:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     endpoint = f"{url}/rest/v1/jobs"
     headers = _headers(key, prefer="return=minimal")
-    resp = requests.delete(
-        endpoint, headers=headers, params={"last_seen": f"lt.{cutoff}"}, timeout=30
+    request_with_retry(
+        "delete", endpoint, headers=headers, params={"last_seen": f"lt.{cutoff}"}, timeout=30
     )
-    resp.raise_for_status()
