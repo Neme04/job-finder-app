@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import type { JobStatus, UserJob } from '../types/db'
+import type { Job, JobStatus, UserJob } from '../types/db'
 import { Badge } from '../components/Badge'
 import { Button } from '../components/Button'
 import { Input } from '../components/Input'
+
+// PostgREST can only apply a top-level `order` to the table being queried.
+// Ordering `user_jobs` by a column on its many-to-one `jobs` relation isn't
+// possible via referencedTable (that option only reorders one-to-many
+// embeds). So we query from `jobs` instead, inner-joined to this user's
+// `user_jobs` row, which makes `posted_at` orderable at the top level.
+interface JobWithUserJobRow extends Job {
+  user_jobs: {
+    id: string
+    status: JobStatus
+    notified_at: string | null
+    created_at: string
+  }[]
+}
 
 const TABS: { value: JobStatus; label: string }[] = [
   { value: 'new', label: 'New' },
@@ -35,15 +49,41 @@ export function Feed() {
   const [tab, setTab] = useState<JobStatus>('new')
   const [search, setSearch] = useState('')
 
+  const PAGE_SIZE = 1000 // Supabase's default max rows per request
+
   const load = async () => {
     if (!user) return
     setLoading(true)
-    const { data } = await supabase
-      .from('user_jobs')
-      .select('*, jobs(*)')
-      .eq('profile_id', user.id)
-      .order('created_at', { ascending: false })
-    setRows((data as UserJob[]) ?? [])
+
+    const all: JobWithUserJobRow[] = []
+    for (let page = 0; page < 20; page++) {
+      const { data } = await supabase
+        .from('jobs')
+        .select('*, user_jobs!inner(id, status, notified_at, created_at)')
+        .eq('user_jobs.profile_id', user.id)
+        .order('posted_at', { ascending: false, nullsFirst: false })
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+
+      const batch = (data as JobWithUserJobRow[]) ?? []
+      all.push(...batch)
+      if (batch.length < PAGE_SIZE) break
+    }
+
+    const flattened: UserJob[] = all.map((job) => {
+      const { user_jobs, ...jobFields } = job
+      const uj = user_jobs[0]
+      return {
+        id: uj.id,
+        profile_id: user.id,
+        job_id: jobFields.id,
+        status: uj.status,
+        notified_at: uj.notified_at,
+        created_at: uj.created_at,
+        jobs: jobFields,
+      }
+    })
+
+    setRows(flattened)
     setLoading(false)
   }
 
