@@ -7,6 +7,12 @@
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "space-landing-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "/private/tmp/claude-502/-Users-cikedionwu-Documents-GitHub-job-finder-app/0fb89181-3b30-4c36-9739-f3900aa1bda4/scratchpad/space-landing"],
+      "port": 8123
     }
   ]
 }
