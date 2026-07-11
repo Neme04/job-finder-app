@@ -16,7 +16,7 @@ from engine.dedupe import dedupe_jobs
 from engine.matcher import run_matcher
 from engine.models import Job
 from engine.normalize import normalize_records
-from engine.notify import run_email_notify
+from engine.notify import run_notifications
 from engine.writer import expire_stale_jobs, upsert_jobs
 
 
@@ -57,8 +57,8 @@ def main() -> None:
     matched = run_matcher()
     print(f"matched (criteria hits attempted, duplicates ignored): {matched}")
 
-    notified = run_email_notify()
-    print(f"email digests sent: {notified}")
+    notified = run_notifications()
+    print(f"email digests sent: {notified['email']}, whatsapp sent: {notified['whatsapp']}")
 
 
 if __name__ == "__main__":

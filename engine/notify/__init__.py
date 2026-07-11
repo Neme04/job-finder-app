@@ -1,3 +1,3 @@
-from .run import run_email_notify
+from .run import run_notifications
 
-__all__ = ["run_email_notify"]
+__all__ = ["run_notifications"]

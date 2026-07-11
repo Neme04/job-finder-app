@@ -1,8 +1,15 @@
-"""Wires the matcher's output to Resend digest emails.
+"""Wires the matcher's output to per-user notifications: email (everyone who
+opts in) and WhatsApp (admin only, per CLAUDE.md §7).
 
-One digest per user per run, only for rows not yet notified
-(user_jobs.notified_at IS NULL), only for profiles with notify_email=true.
-Stays under Resend's free-tier ~100/day cap with a safety margin.
+One notification pass per user per run, only for rows not yet notified
+(user_jobs.notified_at IS NULL). A user's pending matches aren't gated on
+any single channel's toggle — an admin could have email off but WhatsApp
+on — so the query fetches all pending rows and each channel decides for
+itself whether to fire, based on the embedded profile flags. notified_at
+is marked once at least one channel actually sends, so a completely
+opted-out user is left pending indefinitely (harmless — it only affects
+notifications, not feed visibility) rather than silently marked "notified"
+with nothing sent.
 """
 
 import os
@@ -13,9 +20,11 @@ import requests
 
 from engine.http import request_with_retry
 from engine.notify.email import send_digest_email
+from engine.notify.whatsapp import build_whatsapp_summary, send_whatsapp_message
 
 REQUEST_TIMEOUT = 30
-DAILY_SAFETY_CAP = 90  # headroom under Resend's 100/day free-tier limit
+EMAIL_DAILY_SAFETY_CAP = 90  # headroom under Resend's 100/day free-tier limit
+WHATSAPP_DAILY_SAFETY_CAP = 90  # single admin recipient; generous headroom regardless
 PAGE_SIZE = 1000  # Supabase's default max rows per request
 
 
@@ -36,8 +45,8 @@ def _headers(key: str, prefer: str = "") -> dict:
     return headers
 
 
-def _load_pending_notifications() -> dict[str, list[dict]]:
-    """profile_id -> list of {id, title, company, location} for unnotified new matches."""
+def _load_pending_notifications() -> dict[str, dict]:
+    """profile_id -> {notify_email, notify_whatsapp, role, jobs: [...]}."""
     url, key = _client_config()
 
     all_rows: list[dict] = []
@@ -51,10 +60,11 @@ def _load_pending_notifications() -> dict[str, list[dict]]:
             f"{url}/rest/v1/user_jobs",
             headers=headers,
             params={
-                "select": "id,profile_id,jobs(title,company,location),profiles!inner(notify_email)",
+                "select": "id,profile_id,jobs(title,company,location),profiles(notify_email,notify_whatsapp,role)",
                 "notified_at": "is.null",
                 "status": "eq.new",
-                "profiles.notify_email": "eq.true",
+                # Stable order required for correct pagination (see matcher.load_jobs).
+                "order": "id",
             },
             timeout=REQUEST_TIMEOUT,
         )
@@ -63,10 +73,21 @@ def _load_pending_notifications() -> dict[str, list[dict]]:
         if len(batch) < PAGE_SIZE:
             break
 
-    by_profile: dict[str, list[dict]] = defaultdict(list)
+    by_profile: dict[str, dict] = {}
     for row in all_rows:
+        profile_id = row["profile_id"]
+        profile = row["profiles"]
         job = row["jobs"]
-        by_profile[row["profile_id"]].append(
+        entry = by_profile.setdefault(
+            profile_id,
+            {
+                "notify_email": profile["notify_email"],
+                "notify_whatsapp": profile["notify_whatsapp"],
+                "role": profile["role"],
+                "jobs": [],
+            },
+        )
+        entry["jobs"].append(
             {
                 "user_job_id": row["id"],
                 "title": job["title"],
@@ -103,32 +124,55 @@ def _mark_notified(user_job_ids: list[str]) -> None:
     )
 
 
-def run_email_notify() -> int:
-    """Returns the number of digest emails sent."""
+def run_notifications() -> dict[str, int]:
+    """Returns {"email": count, "whatsapp": count} of notifications sent."""
     frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
     feed_url = f"{frontend_url}/feed"
     settings_url = f"{frontend_url}/settings"
 
     pending = _load_pending_notifications()
-    sent = 0
+    email_sent = 0
+    whatsapp_sent = 0
 
-    for profile_id, jobs in pending.items():
-        if sent >= DAILY_SAFETY_CAP:
-            print(f"[notify] hit daily safety cap ({DAILY_SAFETY_CAP}), stopping early")
-            break
+    for profile_id, entry in pending.items():
+        jobs = entry["jobs"]
+        digest_jobs = [
+            {"title": j["title"], "company": j["company"], "location": j["location"]} for j in jobs
+        ]
 
-        email = _get_user_email(profile_id)
-        if not email:
-            continue
+        wants_email = entry["notify_email"]
+        # WhatsApp is admin-only, guarded on role, never on a user-supplied flag alone.
+        wants_whatsapp = entry["role"] == "admin" and entry["notify_whatsapp"]
 
-        digest_jobs = [{"title": j["title"], "company": j["company"], "location": j["location"]} for j in jobs]
-        try:
-            send_digest_email(email, digest_jobs, feed_url, settings_url)
-        except requests.RequestException as e:
-            print(f"[notify] failed to send digest to {email}: {e}")
-            continue
+        if not wants_email and not wants_whatsapp:
+            continue  # leave pending; nothing to notify through
 
-        _mark_notified([j["user_job_id"] for j in jobs])
-        sent += 1
+        notified = False
 
-    return sent
+        if wants_email and email_sent < EMAIL_DAILY_SAFETY_CAP:
+            email = _get_user_email(profile_id)
+            if email:
+                try:
+                    send_digest_email(email, digest_jobs, feed_url, settings_url)
+                    email_sent += 1
+                    notified = True
+                except requests.RequestException as e:
+                    print(f"[notify] failed to send email digest to {email}: {e}")
+        elif wants_email:
+            print(f"[notify] hit email daily safety cap ({EMAIL_DAILY_SAFETY_CAP})")
+
+        if wants_whatsapp and whatsapp_sent < WHATSAPP_DAILY_SAFETY_CAP:
+            try:
+                summary = build_whatsapp_summary(digest_jobs, feed_url)
+                send_whatsapp_message(summary)
+                whatsapp_sent += 1
+                notified = True
+            except requests.RequestException as e:
+                print(f"[notify] failed to send WhatsApp summary: {e}")
+        elif wants_whatsapp:
+            print(f"[notify] hit WhatsApp daily safety cap ({WHATSAPP_DAILY_SAFETY_CAP})")
+
+        if notified:
+            _mark_notified([j["user_job_id"] for j in jobs])
+
+    return {"email": email_sent, "whatsapp": whatsapp_sent}

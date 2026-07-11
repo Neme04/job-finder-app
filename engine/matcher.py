@@ -56,7 +56,11 @@ def load_jobs() -> list[dict]:
             f"{url}/rest/v1/jobs",
             headers=headers,
             params={
-                "select": "id,source_id,title,company,location,remote,salary_min,salary_max"
+                "select": "id,source_id,title,company,location,remote,salary_min,salary_max",
+                # Without an explicit order, Postgres doesn't guarantee a stable
+                # row order across separately-paginated requests, which can
+                # duplicate or skip rows between pages.
+                "order": "id",
             },
             timeout=REQUEST_TIMEOUT,
         )
